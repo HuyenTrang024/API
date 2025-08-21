@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giám sát Camera & Nhận diện biển số</title>
+    <style>
+        /* ### CSS chung cho toàn trang */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; padding: 20px; 
+            background-color: #f0f2f5;  /* nền xám nhạt */
+            color: #333; 
+        }
+        .container { 
+            width: 100%; max-width: 1200px; margin: auto; 
+            display: flex; flex-direction: column; align-items: center; 
+        }
+        h1 { 
+            text-align: center; color: #1e3a8a; margin-bottom: 20px; 
+        }
+
+        /* ### Thẻ hiển thị camera */
+        .camera-card { 
+            background-color: white; border-radius: 12px; 
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
+            overflow: hidden; width: 100%; margin-bottom: 25px; 
+        }
+
+        /* ### Header tên camera */
+        .camera-header { 
+            padding: 15px; background-color: #1f2937; color: white; 
+            text-align: center; font-size: 1.1rem; 
+        }
+
+        /* ### Container video (tỷ lệ 16:9) */
+        .video-container { 
+            position: relative; width: 100%; 
+            padding-top: 56.25%; /* 16:9 */ 
+            overflow: hidden; background-color: #000; 
+        }
+        .video-container img { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%; object-fit: contain; 
+        }
+
+        /* ### Khu vực nút bấm và kết quả */
+        .controls { padding: 15px; text-align: center; }
+
+        /* ### Nút chụp ảnh */
+        .capture-btn { 
+            background-color: #2563eb; color: white; border: none; 
+            padding: 12px 25px; border-radius: 8px; cursor: pointer; 
+            font-size: 1rem; transition: background-color 0.2s; 
+        }
+        .capture-btn:hover { background-color: #1e40af; }
+
+        /* ### Box hiển thị kết quả */
+        .result-box { 
+            margin-top: 15px; padding: 15px; background-color: #e0f2fe; 
+            border-radius: 8px; font-size: 1rem; color: #0c4a6e; 
+        }
+        .result-box.error { background-color: #fecaca; color: #b91c1c; }
+
+        /* ### Text loading */
+        .loading { display: none; margin-top: 10px; color: #4b5563; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Giám sát Camera trực tiếp</h1>
+        
+        <!-- ### Lặp qua danh sách camera truyền từ Flask -->
+        {% for cam in cameras %}
+        <div class="camera-card">
+            <div class="camera-header">{{ cam.name }}</div> <!-- Tên camera -->
+            
+            <!-- ### Video stream MJPEG -->
+            <div class="video-container">
+                <img id="cam{{ cam.id }}_stream" src="{{ url_for('video_feed', camera_id=cam.id) }}" alt="Live Camera Stream">
+            </div>
+
+            <!-- ### Nút chụp + box kết quả -->
+            <div class="controls">
+                <button class="capture-btn" data-cam-id="{{ cam.id }}"> Chụp ảnh & Nhận diện</button>
+                <div id="result{{ cam.id }}" class="result-box"></div> <!-- Hiển thị kết quả -->
+                <div id="loading{{ cam.id }}" class="loading"> Đang xử lý...</div> <!-- Loading -->
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+<script>
+    /* ### JS xử lý sự kiện click "Chụp ảnh & Nhận diện" */
+    document.querySelectorAll('.capture-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const camId = button.dataset.camId;   // lấy id camera
+            const resultDiv = document.getElementById(`result${camId}`);
+            const loadingDiv = document.getElementById(`loading${camId}`);
+
+            resultDiv.innerHTML = '';              // reset kết quả cũ
+            loadingDiv.style.display = 'block';    // hiện loading
+
+            try {
+                // ### Gửi request POST tới Flask API /predict_plate/<id>
+                const response = await fetch(`/predict_plate/${camId}`, { method: 'POST' });
+                const data = await response.json();  // parse JSON response
+
+                loadingDiv.style.display = 'none';  // ẩn loading
+
+                // ### Xử lý kết quả
+                if (data.plate_text) {
+                    // Nếu có biển số
+                    resultDiv.innerHTML = `Biển số: <strong>${data.plate_text}</strong><br>Loại xe: ${data.vehicle_type || "N/A"}`;
+                    resultDiv.classList.remove('error');
+                } else if (data.error) {
+                    // Nếu API trả lỗi
+                    resultDiv.innerHTML = `Lỗi: ${data.error}`;
+                    resultDiv.classList.add('error');
+                } else {
+                    // Không có dữ liệu
+                    resultDiv.innerHTML = "Không nhận diện được biển số.";
+                    resultDiv.classList.add('error');
+                }
+
+            } catch (err) {
+                // ### Xử lý lỗi mạng / lỗi JS
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = `Lỗi hệ thống: ${err.message}`;
+                resultDiv.classList.add('error');
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
