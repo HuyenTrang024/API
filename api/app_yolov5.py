@@ -12,17 +12,23 @@ from fast_plate_ocr import LicensePlateRecognizer
 
 app = FastAPI()
 
+# Đường dẫn tính từ thư mục gốc repo, chạy ở thư mục nào cũng được
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DETECT_MODEL = os.environ.get("DETECT_MODEL", os.path.join(ROOT_DIR, "models/detection/best_5n_Q.pt"))
+OCR_MODEL = os.path.join(ROOT_DIR, "models/ocr/ckpt-epoch_12-acc_0.950.onnx")
+OCR_PLATE_CONFIG = os.path.join(ROOT_DIR, "configs/ocr_plate_config.yaml")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Load YOLOv5 model 
-yolo_model = torch.hub.load('ultralytics/yolov5', 'custom', path='best_5n.pt', force_reload=True)
+yolo_model = torch.hub.load('ultralytics/yolov5', 'custom', path=DETECT_MODEL, force_reload=True)
 yolo_model.to(device)
 yolo_model.eval()
 
 # Load OCR model
 plate_recognizer = LicensePlateRecognizer(
-    onnx_model_path="ckpt-epoch_12-acc_0.950.onnx",
-    plate_config_path="cct_xs_v1_global_plate_config.yaml",
+    onnx_model_path=OCR_MODEL,
+    plate_config_path=OCR_PLATE_CONFIG,
 )
 
 # Hàm đọc ảnh
@@ -114,4 +120,4 @@ async def predict(image: UploadFile = File(...)):
     }
 
 if __name__ == "__main__":
-    uvicorn.run("try:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

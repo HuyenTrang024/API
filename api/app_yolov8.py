@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
+import os
 import uvicorn
 import cv2
 import numpy as np
@@ -9,14 +10,20 @@ from fast_plate_ocr import LicensePlateRecognizer
 
 app = FastAPI()
 
+# Đường dẫn tính từ thư mục gốc repo, chạy ở thư mục nào cũng được
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DETECT_MODEL = os.environ.get("DETECT_MODEL", os.path.join(ROOT_DIR, "models/detection/best.pt"))
+OCR_MODEL = os.path.join(ROOT_DIR, "models/ocr/ckpt-epoch_12-acc_0.950.onnx")
+OCR_PLATE_CONFIG = os.path.join(ROOT_DIR, "configs/ocr_plate_config.yaml")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-yolo_model = YOLO("best.pt")
+yolo_model = YOLO(DETECT_MODEL)
 yolo_model.to(device)  
 
 
 plate_recognizer = LicensePlateRecognizer(
-    onnx_model_path="ckpt-epoch_12-acc_0.950.onnx",
-    plate_config_path="cct_xs_v1_global_plate_config.yaml",
+    onnx_model_path=OCR_MODEL,
+    plate_config_path=OCR_PLATE_CONFIG,
 )
 
 # --- Hàm đọc ảnh ---
@@ -67,4 +74,4 @@ async def predict(image: UploadFile = File(...)):
     return {"results": output}
 
 if __name__ == "__main__":
-    uvicorn.run("connect_API:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
